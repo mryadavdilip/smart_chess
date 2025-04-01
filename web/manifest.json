@@ -1,6 +1,6 @@
 {
-    "name": "smart_chess",
-    "short_name": "smart_chess",
+    "name": "Smart Chess",
+    "short_name": "Smart Chess",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

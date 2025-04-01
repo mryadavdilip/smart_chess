@@ -12,7 +12,7 @@ class ChessApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ScreenUtilInit(
-      designSize: const Size(360, 690), // Standard mobile size for scaling
+      designSize: const Size(360, 690),
       builder: (context, child) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,

@@ -1,4 +1,4 @@
-package com.example.smart_chess
+package com.dilip.smart_chess
 
 import io.flutter.embedding.android.FlutterActivity
 
