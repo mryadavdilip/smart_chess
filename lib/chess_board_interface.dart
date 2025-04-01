@@ -1,5 +1,12 @@
 import 'piece.dart';
 
+class Position {
+  final int row;
+  final int col;
+
+  Position({required this.row, required this.col});
+}
+
 class ChessBoardInterface {
   List<List<ChessPiece?>> board = List.generate(8, (_) => List.filled(8, null));
   final String? fen;
@@ -8,6 +15,8 @@ class ChessBoardInterface {
 
   List<String> history = []; // Stores previous FEN states for undo
   List<String> redoHistory = []; // Stores undone moves for redo
+
+  Position? enPassantTarget;
 
   ChessBoardInterface({this.fen}) {
     fen == null ? _initializeBoard() : initFEN(fen!);
@@ -59,13 +68,38 @@ class ChessBoardInterface {
     board[7][4] = ChessPiece(type: PieceType.king, color: PieceColor.black);
   }
 
-  ChessPiece? getPiece(int row, int col) {
-    return board[row][col];
+  ChessPiece? getPiece(Position position) {
+    return board[position.row][position.col];
   }
 
-  void movePiece(int fromRow, int fromCol, int toRow, int toCol) {
-    board[toRow][toCol] = board[fromRow][fromCol];
-    board[fromRow][fromCol] = null;
+  // Add En Passant logic in the move method
+  bool movePiece(Position from, Position to) {
+    ChessPiece? piece = getPiece(from);
+    if (piece == null) return false;
+
+    // En Passant check
+    if (piece.type == PieceType.pawn &&
+        enPassantTarget != null &&
+        (to.row == enPassantTarget!.row && to.col == enPassantTarget!.col)) {
+      // Perform en-passant capture
+      board[enPassantTarget!.row][enPassantTarget!.col] =
+          null; // Remove the captured pawn
+    }
+
+    // Standard move
+    board[to.row][to.col] = piece;
+    board[from.row][from.col] = null;
+
+    // Update en passant target if a pawn advances two squares
+    if (piece.type == PieceType.pawn &&
+        (from.col == to.col) &&
+        (from.row - to.row).abs() == 2) {
+      enPassantTarget = Position(row: (from.row + to.row) ~/ 2, col: to.col);
+    } else {
+      enPassantTarget = null; // Reset en passant target after other moves
+    }
+
+    return true;
   }
 
   void initFEN(String fen) {

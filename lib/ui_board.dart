@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:smart_chess/storage_service.dart';
-import 'chess_board.dart';
+import 'chess_board_interface.dart';
 import 'game_logic.dart';
 import 'piece.dart';
 
@@ -15,30 +15,71 @@ class ChessBoardUI extends StatefulWidget {
 
 class _ChessBoardUIState extends State<ChessBoardUI> {
   ChessBoardInterface game = ChessBoardInterface();
-  int? selectedRow, selectedCol;
+  Position? selectedPosition;
+  List<Position> validMoves = [];
 
   void onSquareTap(int row, int col) {
+    Position tappedPosition = Position(row: row, col: col);
     setState(() {
-      if (selectedRow == null) {
+      if (selectedPosition == null) {
         // Select piece
-        if (game.getPiece(row, col) != null &&
-            game.getPiece(row, col)!.color == game.turn) {
-          selectedRow = row;
-          selectedCol = col;
+        ChessPiece? piece = game.getPiece(tappedPosition);
+        if (piece != null && piece.color == game.turn) {
+          selectedPosition = tappedPosition;
+          validMoves = game.getValidMoves(tappedPosition);
         }
       } else {
         // Try to move the piece
-        if (game.move(selectedRow!, selectedCol!, row, col)) {
+        if (game.move(selectedPosition!, tappedPosition)) {
+          checkForPawnPromotion(tappedPosition);
           if (game.isCheckmate(game.turn)) {
             _showMessage(
               "${game.turn == PieceColor.white ? 'Black' : 'White'} wins by checkmate!",
             );
           }
         }
-        selectedRow = null;
-        selectedCol = null;
+        selectedPosition = null;
+        validMoves = [];
       }
     });
+  }
+
+  void checkForPawnPromotion(Position position) {
+    ChessPiece? piece = game.getPiece(position);
+    if (piece != null && piece.type == PieceType.pawn) {
+      if (position.row == 0 || position.row == 7) {
+        _showPromotionDialog(position);
+      }
+    }
+  }
+
+  void _showPromotionDialog(Position position) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text("Promote Pawn"),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var type in [
+                  PieceType.queen,
+                  PieceType.rook,
+                  PieceType.bishop,
+                  PieceType.knight,
+                ])
+                  ListTile(
+                    title: Text(type.toString().split('.').last),
+                    onTap: () {
+                      game.promotePawn(position, type);
+                      setState(() {});
+                      Navigator.of(context).pop();
+                    },
+                  ),
+              ],
+            ),
+          ),
+    );
   }
 
   void _showMessage(String message) {
@@ -46,8 +87,8 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
       context: context,
       builder:
           (context) => AlertDialog(
-            title: Text("Game Over", style: TextStyle(fontSize: 18.sp)),
-            content: Text(message, style: TextStyle(fontSize: 16.sp)),
+            title: Text("Game Over"),
+            content: Text(message),
             actions: [
               TextButton(
                 onPressed: () {
@@ -56,7 +97,7 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
                   setState(() {});
                   Navigator.of(context).pop();
                 },
-                child: Text("Restart", style: TextStyle(fontSize: 16.sp)),
+                child: Text("Restart"),
               ),
             ],
           ),
@@ -110,18 +151,22 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
               itemBuilder: (context, index) {
                 int row = index ~/ 8;
                 int col = index % 8;
-                ChessPiece? piece = game.getPiece(row, col);
+                Position pos = Position(row: row, col: col);
+                ChessPiece? piece = game.getPiece(pos);
+                bool isHighlighted = validMoves.contains(pos);
 
                 return GestureDetector(
                   onTap: () => onSquareTap(row, col),
                   child: Container(
                     decoration: BoxDecoration(
                       color:
-                          (row + col) % 2 == 0
+                          isHighlighted
+                              ? Colors.green.withOpacity(0.5)
+                              : (row + col) % 2 == 0
                               ? Colors.brown[300]
                               : Colors.brown[700],
                       border:
-                          (selectedRow == row && selectedCol == col)
+                          selectedPosition == pos
                               ? Border.all(color: Colors.yellow, width: 3.w)
                               : null,
                     ),
@@ -130,20 +175,16 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
                             ? Center(
                               child: Text(
                                 getPieceSymbol(piece),
-                                style: TextStyle(fontSize: 28.sp),
+                                style: TextStyle(
+                                  fontSize: 28.sp,
+                                  color: piece.color.toColor(),
+                                ),
                               ),
                             )
                             : null,
                   ),
                 );
               },
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.all(8.w),
-            child: Text(
-              "${game.turn == PieceColor.white ? 'White' : 'Black'}'s turn",
-              style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold),
             ),
           ),
         ],
