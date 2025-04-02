@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:smart_chess/storage_service.dart';
-import 'chess_board_interface.dart';
-import 'game_logic.dart';
-import 'piece.dart';
+import 'logical_interface/chess_board_interface.dart';
+import 'logical_interface/game_logic.dart';
+import 'logical_interface/piece.dart';
 
 class ChessBoardUI extends StatefulWidget {
   const ChessBoardUI({super.key});
@@ -174,18 +174,12 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
                               ? Border.all(color: Colors.yellow, width: 3.w)
                               : null,
                     ),
-                    child:
-                        piece != null
-                            ? Center(
-                              child: Text(
-                                getPieceSymbol(piece),
-                                style: TextStyle(
-                                  fontSize: 16.sp,
-                                  color: piece.color.toColor(),
-                                ),
-                              ),
-                            )
-                            : null,
+                    child: FutureBuilder(
+                      future: piece?.getResource,
+                      builder: (context, snapshot) {
+                        return snapshot.data ?? Center();
+                      },
+                    ),
                   ),
                 );
               },
@@ -196,15 +190,15 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
     );
   }
 
-  String getPieceSymbol(ChessPiece piece) {
-    Map<PieceType, Map<PieceColor, String>> symbols = {
-      PieceType.pawn: {PieceColor.white: "♙", PieceColor.black: "♟"},
-      PieceType.knight: {PieceColor.white: "♘", PieceColor.black: "♞"},
-      PieceType.bishop: {PieceColor.white: "♗", PieceColor.black: "♝"},
-      PieceType.rook: {PieceColor.white: "♖", PieceColor.black: "♜"},
-      PieceType.queen: {PieceColor.white: "♕", PieceColor.black: "♛"},
-      PieceType.king: {PieceColor.white: "♔", PieceColor.black: "♚"},
-    };
-    return symbols[piece.type]![piece.color]!;
-  }
+  // String getPieceSymbol(ChessPiece piece) {
+  //   Map<PieceType, Map<PieceColor, String>> symbols = {
+  //     PieceType.pawn: {PieceColor.white: "♙", PieceColor.black: "♟"},
+  //     PieceType.knight: {PieceColor.white: "♘", PieceColor.black: "♞"},
+  //     PieceType.bishop: {PieceColor.white: "♗", PieceColor.black: "♝"},
+  //     PieceType.rook: {PieceColor.white: "♖", PieceColor.black: "♜"},
+  //     PieceType.queen: {PieceColor.white: "♕", PieceColor.black: "♛"},
+  //     PieceType.king: {PieceColor.white: "♔", PieceColor.black: "♚"},
+  //   };
+  //   return symbols[piece.type]![piece.color]!;
+  // }
 }

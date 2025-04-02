@@ -7,6 +7,7 @@ environment:
   sdk: ^3.7.0
 
 dependencies:
+  change_case: ^2.2.0
   flutter:
     sdk: flutter
   flutter_screenutil: ^5.9.3
@@ -20,3 +21,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/
+    - assets/materials/
+    - assets/materials/modern_minimalist/
+    - assets/materials/silhoutte_minimalist/

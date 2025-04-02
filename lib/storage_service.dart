@@ -1,15 +1,35 @@
+import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:smart_chess/models/board_theme_config.dart';
 
 class StorageService {
+  static const String boardConfigKey = "chess_board_config";
   static const String gameStateKey = "chess_game_state";
 
+  static Future<SharedPreferences> get _prefs =>
+      SharedPreferences.getInstance();
+
   static Future<void> saveGameState(String fen) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(gameStateKey, fen);
+    await (await _prefs).setString(gameStateKey, fen);
   }
 
   static Future<String?> loadGameState() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(gameStateKey);
+    return (await _prefs).getString(gameStateKey);
+  }
+
+  static Future<bool> setBoardConfig(BoardThemeConfig config) async {
+    return await (await _prefs).setString(
+      boardConfigKey,
+      jsonEncode(config.toMap()),
+    );
+  }
+
+  static Future<BoardThemeConfig> getBoardConfig() async {
+    return BoardThemeConfig.fromMap(
+      (await _prefs).containsKey(boardConfigKey)
+          ? jsonDecode((await _prefs).getString(boardConfigKey) ?? '')
+          : {},
+    );
   }
 }
