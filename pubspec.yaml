@@ -11,6 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_screenutil: ^5.9.3
+  gradient_circular_progress_indicator: ^0.0.4
   share_plus: ^10.1.4
   shared_preferences: ^2.5.3
 
@@ -27,3 +28,5 @@ flutter:
     - assets/materials/
     - assets/materials/modern_minimalist/
     - assets/materials/silhoutte_minimalist/
+    - assets/materials/silhoutte_minimalist/black/
+    - assets/materials/silhoutte_minimalist/white/

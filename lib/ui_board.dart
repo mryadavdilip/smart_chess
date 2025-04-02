@@ -3,7 +3,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:smart_chess/storage_service.dart';
 import 'logical_interface/chess_board_interface.dart';
-import 'logical_interface/game_logic.dart';
 import 'logical_interface/piece.dart';
 
 class ChessBoardUI extends StatefulWidget {
@@ -32,6 +31,7 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
     } else {
       // Try to move the piece
       if (game.move(selectedPosition!, tappedPosition)) {
+        game.history.add(game.toFEN()); // Save the current state
         checkForPawnPromotion(tappedPosition);
         if (game.isCheckmate(game.turn)) {
           _showMessage(
@@ -47,7 +47,7 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
 
   void checkForPawnPromotion(Position position) {
     ChessPiece? piece = game.getPiece(position);
-    if (piece != null && piece.type == PieceType.pawn) {
+    if (piece?.type == PieceType.pawn) {
       if (position.row == 0 || position.row == 7) {
         _showPromotionDialog(position);
       }
@@ -73,8 +73,8 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
                     title: Text(type.toString().split('.').last),
                     onTap: () {
                       game.promotePawn(position, type);
-                      setState(() {});
                       Navigator.of(context).pop();
+                      setState(() {});
                     },
                   ),
               ],
@@ -110,12 +110,9 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
     await StorageService.saveGameState(fen);
   }
 
-  void _loadGame() async {
-    String? fen = await StorageService.loadGameState();
-    if (fen != null) {
-      game = ChessBoardInterface(fen: fen);
-      setState(() {});
-    }
+  void _resetGame() async {
+    game = ChessBoardInterface();
+    setState(() {});
   }
 
   void _shareGame() {
@@ -123,20 +120,24 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
     Share.share("Check out my chess game:\n$fen");
   }
 
+  Object assetKey = Object();
+
   @override
   void initState() {
     super.initState();
-    _loadGame();
+    _resetGame();
   }
 
   @override
   Widget build(BuildContext context) {
+    assetKey = Object();
+
     return Scaffold(
       appBar: AppBar(
         title: Text("Smart Chess"),
         actions: [
           IconButton(icon: Icon(Icons.save), onPressed: _saveGame),
-          IconButton(icon: Icon(Icons.refresh), onPressed: _loadGame),
+          IconButton(icon: Icon(Icons.refresh), onPressed: _resetGame),
           IconButton(icon: Icon(Icons.share), onPressed: _shareGame),
         ],
       ),
@@ -175,15 +176,46 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
                               : null,
                     ),
                     child: FutureBuilder(
+                      key: ValueKey<Object>(assetKey),
                       future: piece?.getResource,
                       builder: (context, snapshot) {
-                        return snapshot.data ?? Center();
+                        return Padding(
+                          padding: EdgeInsets.all(
+                            piece?.type == PieceType.pawn ? 10 : 5.sp,
+                          ),
+                          child: snapshot.data ?? Center(),
+                        );
                       },
                     ),
                   ),
                 );
               },
             ),
+          ),
+          SizedBox(height: 20.h),
+          Row(
+            children: [
+              MaterialButton(
+                onPressed:
+                    game.canUndo()
+                        ? () {
+                          game.undo();
+                          setState(() {});
+                        }
+                        : null,
+                child: Icon(Icons.arrow_back, color: Colors.white),
+              ),
+              MaterialButton(
+                onPressed:
+                    game.canRedo()
+                        ? () {
+                          game.redo();
+                          setState(() {});
+                        }
+                        : null,
+                child: Icon(Icons.arrow_forward, color: Colors.white),
+              ),
+            ],
           ),
         ],
       ),

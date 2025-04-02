@@ -9,8 +9,7 @@ class BoardThemeConfig {
   factory BoardThemeConfig.fromMap(Map<String, dynamic> map) =>
       BoardThemeConfig(
         boardColor: Color(map['boardColor'] ?? 0xAA000000),
-        materialVarity:
-            map['materialVarity'] ?? Environment.materialVarities.first,
+        materialVarity: map['materialVarity'] ?? materialsResources.keys.last,
       );
 
   Map<String, dynamic> toMap() => {

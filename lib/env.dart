@@ -1,10 +1,9 @@
-import 'dart:io';
+import 'package:smart_chess/logical_interface/piece.dart';
 
-class Environment {
-  static List<String> materialVarities = [];
-
-  static Future<void> loadMaterials() async {
-    List<FileSystemEntity> temp = Directory('assets/materials').listSync();
-    materialVarities = temp.map((e) => e.path.split('/').last).toList();
-  }
-}
+Map<String, dynamic> materialsResources = {
+  'modern_minimalist': PieceType.values.map((e) => '${e.name}.png').toList(),
+  'silhoutte_minimalist': {
+    'black': PieceType.values.map((e) => '${e.name}.png').toList(),
+    'white': PieceType.values.map((e) => '${e.name}.png').toList(),
+  },
+};

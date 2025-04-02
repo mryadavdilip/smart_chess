@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:smart_chess/env.dart';
 import 'package:smart_chess/models/board_theme_config.dart';
 import 'package:smart_chess/storage_service.dart';
 
@@ -24,11 +24,10 @@ class ChessPiece {
 extension ChessPieceExtension on ChessPiece {
   Future<Image> get getResource async {
     BoardThemeConfig config = await StorageService.getBoardConfig();
-    bool sameFolderForBothColors = Directory(
-      'assets/materials/${config.materialVarity}',
-    ).listSync().any((e) => !e.path.split('/').last.contains('.'));
+    bool sameFolderForBothColors =
+        materialsResources[config.materialVarity] is List<String>;
     String path =
-        'assets/materials/${config.materialVarity}/${sameFolderForBothColors ? '' : '${color.name}/${type.name}.png'}';
+        'assets/materials/${config.materialVarity}/${sameFolderForBothColors ? '' : '${color.name}/'}${type.name}.png';
 
     return Image.asset(
       path,
