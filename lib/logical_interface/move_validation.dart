@@ -1,5 +1,5 @@
+import 'package:smart_chess/logical_interface/chess_board_interface.dart';
 import 'piece.dart';
-import 'chess_board_interface.dart';
 
 class MoveValidator {
   static bool isValidMove(
@@ -37,22 +37,33 @@ class MoveValidator {
     Position to,
     ChessBoardInterface board,
   ) {
-    int direction = (piece.color == PieceColor.white) ? 1 : -1;
-    int startRow = (piece.color == PieceColor.white) ? 1 : 6;
+    // Adjust movement based on board indexing:
+    // White pawns start at row 6 and move upward (decrease row)
+    // Black pawns start at row 1 and move downward (increase row)
+    int direction = (piece.color == PieceColor.white) ? -1 : 1;
+    int startRow = (piece.color == PieceColor.white) ? 6 : 1;
 
     // Normal move forward
     if (from.col == to.col && board.getPiece(to) == null) {
-      if (to.row == from.row + direction) return true; // Single move
+      // Single move forward
+      if (to.row == from.row + direction) return true;
+      // Double move forward from starting row (ensure the intermediate square is empty)
       if (from.row == startRow &&
           to.row == from.row + (2 * direction) &&
-          board.getPiece(to) == null) {
-        return true; // Double move from starting position
+          board.getPiece(Position(row: from.row + direction, col: from.col)) ==
+              null) {
+        return true;
       }
     }
 
-    // Capturing diagonally
+    // Diagonal capture (including en passant)
     if ((to.col - from.col).abs() == 1 && to.row == from.row + direction) {
+      // Standard capture if enemy piece is present.
       if (board.getPiece(to) != null) return true;
+      // En passant capture: allow move if the target square is the en passant target.
+      if (board.enPassantTarget != null && board.enPassantTarget == to) {
+        return true;
+      }
     }
 
     return false;

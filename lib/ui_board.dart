@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:gradient_circular_progress_indicator/gradient_circular_progress_indicator.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:smart_chess/models/board_theme_config.dart';
 import 'package:smart_chess/storage_service.dart';
+import 'package:smart_chess/color_extension.dart';
 import 'logical_interface/chess_board_interface.dart';
 import 'logical_interface/piece.dart';
 
@@ -17,21 +20,31 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
   Position? selectedPosition;
   List<Position> validMoves = [];
 
+  // Define board size using ScreenUtil for responsive design
   Size boardSize = Size(360.w, 360.w);
 
   void onSquareTap(int row, int col) {
     Position tappedPosition = Position(row: row, col: col);
+    ChessPiece? piece = game.getPiece(tappedPosition);
+
+    // If it's your turn and you tap on a pawn on the promotion rank, show the promotion dialog.
+    if (piece != null &&
+        piece.color == game.turn &&
+        piece.type == PieceType.pawn &&
+        (tappedPosition.row == 0 || tappedPosition.row == 7)) {
+      _showPromotionDialog(tappedPosition);
+      return; // Exit so that the normal selection/move logic isn't executed.
+    }
+
+    // Normal selection/move process:
     if (selectedPosition == null) {
-      // Select piece
-      ChessPiece? piece = game.getPiece(tappedPosition);
       if (piece != null && piece.color == game.turn) {
         selectedPosition = tappedPosition;
         validMoves = game.getValidMoves(tappedPosition);
       }
     } else {
-      // Try to move the piece
+      // If a piece is already selected, attempt to move it.
       if (game.move(selectedPosition!, tappedPosition)) {
-        game.history.add(game.toFEN()); // Save the current state
         checkForPawnPromotion(tappedPosition);
         if (game.isCheckmate(game.turn)) {
           _showMessage(
@@ -59,7 +72,7 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
       context: context,
       builder:
           (context) => AlertDialog(
-            title: Text("Promote Pawn"),
+            title: const Text("Promote Pawn"),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -88,17 +101,16 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
       context: context,
       builder:
           (context) => AlertDialog(
-            title: Text("Game Over"),
+            title: const Text("Game Over"),
             content: Text(message),
             actions: [
               TextButton(
                 onPressed: () {
                   game = ChessBoardInterface();
-                  game.turn = PieceColor.white;
                   setState(() {});
                   Navigator.of(context).pop();
                 },
-                child: Text("Restart"),
+                child: const Text("Restart"),
               ),
             ],
           ),
@@ -110,7 +122,7 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
     await StorageService.saveGameState(fen);
   }
 
-  void _resetGame() async {
+  void _resetGame() {
     game = ChessBoardInterface();
     setState(() {});
   }
@@ -120,8 +132,6 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
     Share.share("Check out my chess game:\n$fen");
   }
 
-  Object assetKey = Object();
-
   @override
   void initState() {
     super.initState();
@@ -130,70 +140,88 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
 
   @override
   Widget build(BuildContext context) {
-    assetKey = Object();
-
     return Scaffold(
       appBar: AppBar(
-        title: Text("Smart Chess"),
+        title: const Text("Smart Chess"),
         actions: [
-          IconButton(icon: Icon(Icons.save), onPressed: _saveGame),
-          IconButton(icon: Icon(Icons.refresh), onPressed: _resetGame),
-          IconButton(icon: Icon(Icons.share), onPressed: _shareGame),
+          IconButton(icon: const Icon(Icons.save), onPressed: _saveGame),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _resetGame),
+          IconButton(icon: const Icon(Icons.share), onPressed: _shareGame),
         ],
       ),
       body: Column(
         children: [
-          SizedBox(
-            height: boardSize.height,
-            width: boardSize.width,
-            child: GridView.builder(
-              itemCount: 64,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 8,
-                childAspectRatio: 1,
-                mainAxisExtent: boardSize.height / 8,
-              ),
-              itemBuilder: (context, index) {
-                int row = index ~/ 8;
-                int col = index % 8;
-                Position pos = Position(row: row, col: col);
-                ChessPiece? piece = game.getPiece(pos);
-                bool isHighlighted = validMoves.contains(pos);
+          FutureBuilder(
+            future: StorageService.getBoardConfig(),
+            builder: (context, configSS) {
+              BoardThemeConfig? config = configSS.data;
 
-                return GestureDetector(
-                  onTap: () => onSquareTap(row, col),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color:
-                          isHighlighted
-                              ? Colors.green.withValues(alpha: 0.5)
-                              : (row + col) % 2 == 0
-                              ? Colors.brown[300]
-                              : Colors.brown[700],
-                      border:
-                          selectedPosition == pos
-                              ? Border.all(color: Colors.yellow, width: 3.w)
-                              : null,
-                    ),
-                    child: FutureBuilder(
-                      key: ValueKey<Object>(assetKey),
-                      future: piece?.getResource,
-                      builder: (context, snapshot) {
-                        return Padding(
-                          padding: EdgeInsets.all(
-                            piece?.type == PieceType.pawn ? 10 : 5.sp,
-                          ),
-                          child: snapshot.data ?? Center(),
-                        );
-                      },
-                    ),
+              return SizedBox(
+                height: boardSize.height,
+                width: boardSize.width,
+                child: GridView.builder(
+                  itemCount: 64,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 8,
+                    childAspectRatio: 1,
+                    mainAxisExtent: boardSize.height / 8,
                   ),
-                );
-              },
-            ),
+                  itemBuilder: (context, index) {
+                    int row = index ~/ 8;
+                    int col = index % 8;
+                    Position pos = Position(row: row, col: col);
+                    ChessPiece? piece = game.getPiece(pos);
+                    bool isHighlighted =
+                        validMoves.contains(pos) || selectedPosition == pos;
+
+                    return GestureDetector(
+                      onTap: () => onSquareTap(row, col),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color:
+                              (row + col) % 2 == 0
+                                  ? config?.boardColor.toMaterialColor()[1]
+                                  : config?.boardColor.toMaterialColor()[2],
+                          border:
+                              selectedPosition == pos
+                                  ? Border.all(color: Colors.yellow, width: 3.w)
+                                  : null,
+                        ),
+                        child: Stack(
+                          children: [
+                            // GradientCircularProgressIndicator(
+                            //   progress: 100,
+                            //   gradient: LinearGradient(colors: []),
+                            // ),
+                            // Container(
+                            //   height: 20.w,
+                            //   width: 20.w,
+                            //   decoration: BoxDecoration(),
+                            // ),
+                            FutureBuilder(
+                              key: ValueKey('$row-$col-${piece?.type}'),
+                              future: piece?.getResource,
+                              builder: (context, ss) {
+                                return Padding(
+                                  padding: EdgeInsets.all(
+                                    piece?.type == PieceType.pawn ? 10 : 5.sp,
+                                  ),
+                                  child: ss.data ?? SizedBox.shrink(),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
           ),
           SizedBox(height: 20.h),
           Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               MaterialButton(
                 onPressed:
@@ -203,7 +231,7 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
                           setState(() {});
                         }
                         : null,
-                child: Icon(Icons.arrow_back, color: Colors.white),
+                child: const Icon(Icons.arrow_back, color: Colors.white),
               ),
               MaterialButton(
                 onPressed:
@@ -213,7 +241,7 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
                           setState(() {});
                         }
                         : null,
-                child: Icon(Icons.arrow_forward, color: Colors.white),
+                child: const Icon(Icons.arrow_forward, color: Colors.white),
               ),
             ],
           ),
@@ -221,16 +249,4 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
       ),
     );
   }
-
-  // String getPieceSymbol(ChessPiece piece) {
-  //   Map<PieceType, Map<PieceColor, String>> symbols = {
-  //     PieceType.pawn: {PieceColor.white: "♙", PieceColor.black: "♟"},
-  //     PieceType.knight: {PieceColor.white: "♘", PieceColor.black: "♞"},
-  //     PieceType.bishop: {PieceColor.white: "♗", PieceColor.black: "♝"},
-  //     PieceType.rook: {PieceColor.white: "♖", PieceColor.black: "♜"},
-  //     PieceType.queen: {PieceColor.white: "♕", PieceColor.black: "♛"},
-  //     PieceType.king: {PieceColor.white: "♔", PieceColor.black: "♚"},
-  //   };
-  //   return symbols[piece.type]![piece.color]!;
-  // }
 }

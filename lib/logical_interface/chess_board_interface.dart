@@ -1,5 +1,4 @@
 import 'package:smart_chess/logical_interface/move_validation.dart';
-
 import 'piece.dart';
 
 class Position {
@@ -7,12 +6,27 @@ class Position {
   final int col;
 
   Position({required this.row, required this.col});
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Position &&
+          runtimeType == other.runtimeType &&
+          row == other.row &&
+          col == other.col;
+
+  @override
+  int get hashCode => row.hashCode ^ col.hashCode;
 }
 
 class ChessBoardInterface {
   List<List<ChessPiece?>> board = List.generate(8, (_) => List.filled(8, null));
   final String? fen;
-  final String initialState = 'RNBQKBNR/PPPPPPPP/8/8/8/8/pppppppp/rnbqkbnr w';
+  // Adjust the initial state FEN so that the first rank (board[0]) corresponds
+  // to the first row in the FEN and the last rank (board[7]) corresponds to the last row.
+  // For example, if you want white pieces at the bottom (board[0]), then your FEN might look like:
+  // 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w'
+  final String initialState = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w';
 
   PieceColor turn = PieceColor.white;
 
@@ -25,43 +39,37 @@ class ChessBoardInterface {
     initFEN(fen ?? initialState);
   }
 
-  clearBoard() {
+  void clearBoard() {
     board = List.generate(8, (_) => List.filled(8, null));
   }
 
   void initFEN(String fen) {
     clearBoard();
-    // Split the FEN string into its components.
     List<String> parts = fen.split(" ");
     List<String> rows = parts[0].split("/");
 
-    // Determine the turn (who plays next).
+    // Determine turn from FEN.
     turn = (parts[1] == "w") ? PieceColor.white : PieceColor.black;
 
-    // Loop over each rank (row) from 8 to 1 (in FEN, ranks are ordered from 8 to 1).
-    for (int row = 7; row >= 0; row--) {
+    // Here we assume the FEN rows correspond directly to board rows (0 to 7).
+    for (int row = 0; row < 8; row++) {
       int col = 0;
-
-      // Iterate over the characters in the row string (rank) for the specific row.
-      for (int i = 0; i < rows[7 - row].length; i++) {
-        String charAt = rows[7 - row][i];
-
-        // If the character is a number (1-8), it indicates empty squares.
+      String fenRow = rows[row]; // no reversal
+      for (int i = 0; i < fenRow.length; i++) {
+        String charAt = fenRow[i];
         if (RegExp(r'[1-8]').hasMatch(charAt)) {
-          col += int.parse(charAt); // Skip that many columns.
+          col += int.parse(charAt);
         } else {
-          // Otherwise, it's a piece, so set the corresponding square on the board.
           board[row][col] = _getPieceFromChar(charAt);
-          col++; // Move to the next column.
+          col++;
         }
       }
     }
   }
 
   String toFEN() {
-    StringBuffer fen = StringBuffer();
-
-    // Add board rows to FEN
+    StringBuffer fenBuffer = StringBuffer();
+    // Generate FEN from board row 0 to row 7.
     for (int row = 0; row < 8; row++) {
       int emptyCount = 0;
       for (int col = 0; col < 8; col++) {
@@ -70,140 +78,98 @@ class ChessBoardInterface {
           emptyCount++;
         } else {
           if (emptyCount > 0) {
-            fen.write(emptyCount);
+            fenBuffer.write(emptyCount);
             emptyCount = 0;
           }
-          fen.write(_getPieceChar(piece));
+          fenBuffer.write(_getPieceChar(piece));
         }
       }
-      if (emptyCount > 0) {
-        fen.write(emptyCount);
-      }
-      if (row < 7) fen.write("/"); // Separate rows with "/"
+      if (emptyCount > 0) fenBuffer.write(emptyCount);
+      if (row < 7) fenBuffer.write("/");
     }
-
-    // Add turn
-    fen.write(" ");
-    fen.write(turn == PieceColor.white ? "w" : "b");
-
-    return fen.toString();
+    fenBuffer.write(" ");
+    fenBuffer.write(turn == PieceColor.white ? "w" : "b");
+    return fenBuffer.toString();
   }
 
   ChessPiece? getPiece(Position position) {
     return board[position.row][position.col];
   }
 
-  // Add En Passant logic in the move method
-  bool movePiece(Position from, Position to, {bool? virtual}) {
+  /// Moves a piece from [from] to [to] with en passant handling.
+  bool _movePiece(Position from, Position to) {
     ChessPiece? piece = getPiece(from);
     if (piece == null) return false;
 
-    // En Passant check
+    // Check for En Passant Capture
     if (piece.type == PieceType.pawn &&
         enPassantTarget != null &&
-        (to.row == enPassantTarget!.row && to.col == enPassantTarget!.col)) {
-      // Perform en-passant capture
-      board[enPassantTarget!.row][enPassantTarget!.col] =
-          null; // Remove the captured pawn
+        to == enPassantTarget &&
+        from.col != to.col) {
+      // Ensure it's a diagonal move
+      int capturedPawnRow =
+          (piece.color == PieceColor.white) ? to.row + 1 : to.row - 1;
+      board[capturedPawnRow][to.col] = null; // Remove the captured pawn
     }
 
-    // Standard move
+    // Move the piece to the new position
     board[to.row][to.col] = piece;
     board[from.row][from.col] = null;
 
-    // Update en passant target if a pawn advances two squares
-    if (piece.type == PieceType.pawn &&
-        (from.col == to.col) &&
-        (from.row - to.row).abs() == 2) {
+    // Reset En Passant target (unless it's being set)
+    enPassantTarget = null;
+
+    // Set En Passant target if a pawn moves two squares forward
+    if (piece.type == PieceType.pawn && (from.row - to.row).abs() == 2) {
       enPassantTarget = Position(row: (from.row + to.row) ~/ 2, col: to.col);
-    } else {
-      enPassantTarget = null; // Reset en passant target after other moves
     }
 
     return true;
   }
 
-  static String _getPieceChar(ChessPiece piece) {
-    Map<PieceType, String> whitePieces = {
-      PieceType.pawn: "P",
-      PieceType.knight: "N",
-      PieceType.bishop: "B",
-      PieceType.rook: "R",
-      PieceType.queen: "Q",
-      PieceType.king: "K",
-    };
-    Map<PieceType, String> blackPieces = {
-      PieceType.pawn: "p",
-      PieceType.knight: "n",
-      PieceType.bishop: "b",
-      PieceType.rook: "r",
-      PieceType.queen: "q",
-      PieceType.king: "k",
-    };
-    return (piece.color == PieceColor.white ? whitePieces : blackPieces)[piece
-        .type]!;
-  }
-
-  static ChessPiece _getPieceFromChar(String char) {
-    Map<String, ChessPiece> pieceMap = {
-      "P": ChessPiece(type: PieceType.pawn, color: PieceColor.white),
-      "N": ChessPiece(type: PieceType.knight, color: PieceColor.white),
-      "B": ChessPiece(type: PieceType.bishop, color: PieceColor.white),
-      "R": ChessPiece(type: PieceType.rook, color: PieceColor.white),
-      "Q": ChessPiece(type: PieceType.queen, color: PieceColor.white),
-      "K": ChessPiece(type: PieceType.king, color: PieceColor.white),
-      "p": ChessPiece(type: PieceType.pawn, color: PieceColor.black),
-      "n": ChessPiece(type: PieceType.knight, color: PieceColor.black),
-      "b": ChessPiece(type: PieceType.bishop, color: PieceColor.black),
-      "r": ChessPiece(type: PieceType.rook, color: PieceColor.black),
-      "q": ChessPiece(type: PieceType.queen, color: PieceColor.black),
-      "k": ChessPiece(type: PieceType.king, color: PieceColor.black),
-    };
-    return pieceMap[char]!;
-  }
-
   bool move(Position from, Position to) {
     ChessPiece? piece = getPiece(from);
-    if (piece == null || piece.color != turn) return false; // Invalid move
+    if (piece == null || piece.color != turn) {
+      return false; // No piece or wrong turn
+    }
     if (!MoveValidator.isValidMove(this, from, to)) {
-      return false; // Illegal move
+      return false; // Illegal move as per validator
     }
 
-    history.add(toFEN()); // Save the current state
+    // Save current state for undo.
+    history.add(toFEN());
 
-    // Handle En Passant
+    // Handle En Passant capture (if applicable).
     if (piece.type == PieceType.pawn &&
         enPassantTarget != null &&
         to == enPassantTarget) {
-      board[from.row][to.col] = null; // Remove captured pawn
+      int captureRow =
+          piece.color == PieceColor.white ? to.row + 1 : to.row - 1;
+      board[captureRow][to.col] = null;
     }
 
-    // Save En Passant target
+    // Set en passant target if pawn moves two squares.
     enPassantTarget =
-        (piece.type == PieceType.pawn && (to.row - from.row).abs() == 2)
+        (piece.type == PieceType.pawn && (from.row - to.row).abs() == 2)
             ? Position(row: (from.row + to.row) ~/ 2, col: from.col)
             : null;
 
-    // Capture and move piece
+    // Capture any piece on the destination and move the piece.
     ChessPiece? capturedPiece = getPiece(to);
-    movePiece(from, to, virtual: true);
+    _movePiece(from, to);
 
-    // Check if the king is in check (undo if necessary)
+    // Validate that the move doesn't leave the king in check.
     if (isKingInCheck(turn)) {
-      movePiece(to, from, virtual: true);
+      // Undo the move if it puts the king in check.
+      _movePiece(to, from);
       board[to.row][to.col] = capturedPiece;
       return false;
     }
 
-    // **Trigger Pawn Promotion (Handled in UI)**
-    // if (piece.type == PieceType.pawn && (to.row == 0 || to.row == 7)) {
-    //   // promotePawn(to, PieceType.queen); // Default to queen (UI should override)
-    // }
-
-    // Switch turn
+    // Switch turn after a successful move.
     switchTurn();
-
-    redoHistory.clear(); // Clear redo stack only after a successful move
+    // Clear redo history.
+    redoHistory.clear();
 
     return true;
   }
@@ -211,7 +177,7 @@ class ChessBoardInterface {
   bool isKingInCheck(PieceColor kingColor) {
     int kingRow = -1, kingCol = -1;
 
-    // Locate the king
+    // Locate the king.
     for (int row = 0; row < 8; row++) {
       for (int col = 0; col < 8; col++) {
         ChessPiece? piece = getPiece(Position(row: row, col: col));
@@ -225,7 +191,7 @@ class ChessBoardInterface {
       }
     }
 
-    // Check if any opponent's piece can attack the king
+    // Check if any opponent's piece can attack the king.
     for (int row = 0; row < 8; row++) {
       for (int col = 0; col < 8; col++) {
         ChessPiece? piece = getPiece(Position(row: row, col: col));
@@ -246,7 +212,7 @@ class ChessBoardInterface {
   bool isCheckmate(PieceColor kingColor) {
     if (!isKingInCheck(kingColor)) return false;
 
-    // Try all possible moves to escape check
+    // Try all possible moves for the king's color to see if any escape check.
     for (int row = 0; row < 8; row++) {
       for (int col = 0; col < 8; col++) {
         ChessPiece? piece = getPiece(Position(row: row, col: col));
@@ -261,16 +227,16 @@ class ChessBoardInterface {
                 ChessPiece? capturedPiece = getPiece(
                   Position(row: newRow, col: newCol),
                 );
-                movePiece(
+                _movePiece(
                   Position(row: row, col: col),
                   Position(row: newRow, col: newCol),
                 );
                 bool stillInCheck = isKingInCheck(kingColor);
-                movePiece(
+                _movePiece(
                   Position(row: newRow, col: newCol),
                   Position(row: row, col: col),
                 );
-                board[newRow][newCol] = capturedPiece; // Restore captured piece
+                board[newRow][newCol] = capturedPiece; // Restore piece
                 if (!stillInCheck) return false;
               }
             }
@@ -285,10 +251,7 @@ class ChessBoardInterface {
     for (int fromRow = 0; fromRow < 8; fromRow++) {
       for (int fromCol = 0; fromCol < 8; fromCol++) {
         ChessPiece? piece = getPiece(Position(row: fromRow, col: fromCol));
-        if (piece == null || piece.color != turn) {
-          continue; // Skip opponent's pieces
-        }
-
+        if (piece == null || piece.color != turn) continue;
         for (int toRow = 0; toRow < 8; toRow++) {
           for (int toCol = 0; toCol < 8; toCol++) {
             if (MoveValidator.isValidMove(
@@ -296,13 +259,13 @@ class ChessBoardInterface {
               Position(row: fromRow, col: fromCol),
               Position(row: toRow, col: toCol),
             )) {
-              return false; // Found a legal move, not stalemate
+              return false;
             }
           }
         }
       }
     }
-    return !isKingInCheck(turn); // Stalemate if king is safe but no moves left
+    return !isKingInCheck(turn);
   }
 
   List<Position> getValidMoves(Position position) {
@@ -315,11 +278,11 @@ class ChessBoardInterface {
       for (int col = 0; col < 8; col++) {
         Position target = Position(row: row, col: col);
         if (MoveValidator.isValidMove(this, position, target)) {
-          // Simulate the move to check if it doesn't put the king in check
+          // Simulate move to see if king remains safe.
           ChessPiece? capturedPiece = getPiece(target);
-          movePiece(position, target);
+          _movePiece(position, target);
           bool stillInCheck = isKingInCheck(turn);
-          movePiece(target, position);
+          _movePiece(target, position);
           board[target.row][target.col] =
               capturedPiece; // Restore captured piece
 
@@ -335,26 +298,18 @@ class ChessBoardInterface {
 
   void promotePawn(Position position, PieceType type) {
     ChessPiece? piece = getPiece(position);
-
-    // Ensure it's a pawn at the last rank
-    print(0);
+    // Ensure the piece is a pawn on the final rank.
     if (piece == null || piece.type != PieceType.pawn) return;
-    print(1);
     if ((piece.color == PieceColor.white && position.row != 0) ||
         (piece.color == PieceColor.black && position.row != 7)) {
-      print(2);
       return;
     }
 
-    print(3);
-
-    // Promote the pawn to the selected piece type
+    // Promote the pawn.
     board[position.row][position.col] = ChessPiece(
       type: type,
       color: piece.color,
     );
-
-    print(getPiece(position)?.type);
   }
 
   bool canUndo() => history.isNotEmpty;
@@ -362,21 +317,72 @@ class ChessBoardInterface {
 
   void undo() {
     if (history.isNotEmpty) {
-      redoHistory.add(toFEN()); // Save current state for redo
-      switchTurn();
+      String currentFEN = toFEN();
+      // If the last state in history is identical to the current state,
+      // remove it so that we actually restore a different state.
+      if (history.last == currentFEN) {
+        history.removeLast();
+        return;
+      }
+      redoHistory.add(currentFEN);
       initFEN(history.removeLast());
     }
   }
 
   void redo() {
     if (redoHistory.isNotEmpty) {
-      history.add(toFEN()); // Save current state for undo
-      switchTurn();
+      String currentFEN = toFEN();
+      if (redoHistory.last == currentFEN) {
+        redoHistory.removeLast();
+        return;
+      }
+      history.add(currentFEN);
       initFEN(redoHistory.removeLast());
     }
   }
 
+  // Switch turn to the opposite color.
   void switchTurn() {
     turn = (turn == PieceColor.white) ? PieceColor.black : PieceColor.white;
+  }
+
+  static String _getPieceChar(ChessPiece piece) {
+    Map<PieceType, String> whitePieces = {
+      PieceType.pawn: "P",
+      PieceType.knight: "N",
+      PieceType.bishop: "B",
+      PieceType.rook: "R",
+      PieceType.queen: "Q",
+      PieceType.king: "K",
+    };
+    Map<PieceType, String> blackPieces = {
+      PieceType.pawn: "p",
+      PieceType.knight: "n",
+      PieceType.bishop: "b",
+      PieceType.rook: "r",
+      PieceType.queen: "q",
+      PieceType.king: "k",
+    };
+    return (piece.color == PieceColor.white
+        ? whitePieces[piece.type]
+        : blackPieces[piece.type])!;
+  }
+
+  static ChessPiece _getPieceFromChar(String char) {
+    Map<String, ChessPiece> pieceMap = {
+      "P": ChessPiece(type: PieceType.pawn, color: PieceColor.white),
+      "N": ChessPiece(type: PieceType.knight, color: PieceColor.white),
+      "B": ChessPiece(type: PieceType.bishop, color: PieceColor.white),
+      "R": ChessPiece(type: PieceType.rook, color: PieceColor.white),
+      "Q": ChessPiece(type: PieceType.queen, color: PieceColor.white),
+      "K": ChessPiece(type: PieceType.king, color: PieceColor.white),
+      "p": ChessPiece(type: PieceType.pawn, color: PieceColor.black),
+      "n": ChessPiece(type: PieceType.knight, color: PieceColor.black),
+      "b": ChessPiece(type: PieceType.bishop, color: PieceColor.black),
+      "r": ChessPiece(type: PieceType.rook, color: PieceColor.black),
+      "q": ChessPiece(type: PieceType.queen, color: PieceColor.black),
+      "k": ChessPiece(type: PieceType.king, color: PieceColor.black),
+    };
+    return pieceMap[char]!;
   }
 }

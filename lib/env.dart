@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:smart_chess/logical_interface/piece.dart';
 
 Map<String, dynamic> materialsResources = {
@@ -7,3 +8,5 @@ Map<String, dynamic> materialsResources = {
     'white': PieceType.values.map((e) => '${e.name}.png').toList(),
   },
 };
+
+List<Color> boardColors = [Colors.brown, Colors.green, Colors.red];
