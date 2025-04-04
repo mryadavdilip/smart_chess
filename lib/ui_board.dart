@@ -4,8 +4,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:smart_chess/models/board_theme_config.dart';
 import 'package:smart_chess/storage_service.dart';
 import 'package:smart_chess/color_extension.dart';
-import 'logical_interface/chess_board_interface.dart';
-import 'logical_interface/piece.dart';
+import 'package:gradient_circular_progress_indicator/gradient_circular_progress_indicator.dart';
+import 'package:smart_chess/logical_interface/chess_board_interface.dart';
+import 'package:smart_chess/logical_interface/piece.dart';
 
 class ChessBoardUI extends StatefulWidget {
   const ChessBoardUI({super.key});
@@ -168,30 +169,49 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
                   itemBuilder: (context, index) {
                     int row = index ~/ 8;
                     int col = index % 8;
+                    bool isWhite = (row + col) % 2 == 0;
+
                     Position pos = Position(row: row, col: col);
                     ChessPiece? piece = game.getPiece(pos);
-                    bool isHighlighted =
-                        validMoves.contains(pos) || selectedPosition == pos;
 
                     return GestureDetector(
                       onTap: () => onSquareTap(row, col),
                       child: Container(
                         decoration: BoxDecoration(
                           color:
-                              (row + col) % 2 == 0
+                              isWhite
                                   ? config?.boardColor.toMaterialColor()[1]
                                   : config?.boardColor.toMaterialColor()[2],
                           border:
                               selectedPosition == pos
-                                  ? Border.all(color: Colors.yellow, width: 3.w)
+                                  ? Border.all(
+                                    color: game.turn.toColor(),
+                                    width: 3.w,
+                                  )
                                   : null,
                         ),
                         child: Stack(
+                          alignment: Alignment.center,
                           children: [
-                            // GradientCircularProgressIndicator(
-                            //   progress: 100,
-                            //   gradient: LinearGradient(colors: []),
-                            // ),
+                            if (validMoves.contains(pos))
+                              GradientCircularProgressIndicator(
+                                progress: 100,
+                                stroke: 3.sp,
+                                size:
+                                    game.board[row][col] == null
+                                        ? (boardSize.width / 8) - 5.sp
+                                        : (boardSize.width / 8) - 20.sp,
+                                gradient: SweepGradient(
+                                  transform: GradientRotation(45),
+                                  colors: [
+                                    game.turn.toColor(),
+                                    config?.boardColor.toMaterialColor()[1] ??
+                                        Colors.white,
+                                    config?.boardColor.toMaterialColor()[2] ??
+                                        Colors.black,
+                                  ],
+                                ),
+                              ),
                             // Container(
                             //   height: 20.w,
                             //   width: 20.w,
