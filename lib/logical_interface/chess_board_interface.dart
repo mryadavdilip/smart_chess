@@ -96,33 +96,14 @@ class ChessBoardInterface {
     return board[position.row][position.col];
   }
 
-  /// Moves a piece from [from] to [to] with en passant handling.
+  /// Moves a piece on the board without validation.
   bool _movePiece(Position from, Position to) {
     ChessPiece? piece = getPiece(from);
     if (piece == null) return false;
 
-    // Check for En Passant Capture
-    if (piece.type == PieceType.pawn &&
-        enPassantTarget != null &&
-        to == enPassantTarget &&
-        from.col != to.col) {
-      // Ensure it's a diagonal move
-      int capturedPawnRow =
-          (piece.color == PieceColor.white) ? to.row + 1 : to.row - 1;
-      board[capturedPawnRow][to.col] = null; // Remove the captured pawn
-    }
-
     // Move the piece to the new position
     board[to.row][to.col] = piece;
     board[from.row][from.col] = null;
-
-    // Reset En Passant target (unless it's being set)
-    enPassantTarget = null;
-
-    // Set En Passant target if a pawn moves two squares forward
-    if (piece.type == PieceType.pawn && (from.row - to.row).abs() == 2) {
-      enPassantTarget = Position(row: (from.row + to.row) ~/ 2, col: to.col);
-    }
 
     return true;
   }

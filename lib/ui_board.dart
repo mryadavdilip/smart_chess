@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:gradient_circular_progress_indicator/gradient_circular_progress_indicator.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:smart_chess/models/board_theme_config.dart';
 import 'package:smart_chess/storage_service.dart';
