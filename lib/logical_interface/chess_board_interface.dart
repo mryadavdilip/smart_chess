@@ -26,7 +26,8 @@ class ChessBoardInterface {
   // to the first row in the FEN and the last rank (board[7]) corresponds to the last row.
   // For example, if you want white pieces at the bottom (board[0]), then your FEN might look like:
   // 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w'
-  final String initialState = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w';
+  final String initialState =
+      'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 
   PieceColor turn = PieceColor.white;
 
@@ -34,6 +35,9 @@ class ChessBoardInterface {
   List<String> redoHistory = []; // Stores undone moves for redo
 
   Position? enPassantTarget;
+
+  int halfMoveClock = 0; // Halfmove clock for draw conditions
+  int fullMoveNumber = 1; // Fullmove number for draw conditions
 
   ChessBoardInterface({this.fen}) {
     initFEN(fen ?? initialState);
@@ -50,6 +54,19 @@ class ChessBoardInterface {
 
     // Determine turn from FEN.
     turn = (parts[1] == "w") ? PieceColor.white : PieceColor.black;
+
+    // En-passant target square (if any).
+    if (parts[3] != "-") {
+      String targetSquare = parts[3];
+      int col = targetSquare.codeUnitAt(0) - 'a'.codeUnitAt(0);
+      int row = 8 - int.parse(targetSquare[1]);
+      enPassantTarget = Position(row: row, col: col);
+    } else {
+      enPassantTarget = null;
+    }
+
+    halfMoveClock = int.tryParse(parts[4]) ?? 0; // Halfmove clock from FEN
+    fullMoveNumber = int.tryParse(parts[5]) ?? 1; // Fullmove number from FEN
 
     // Here we assume the FEN rows correspond directly to board rows (0 to 7).
     for (int row = 0; row < 8; row++) {
@@ -69,7 +86,7 @@ class ChessBoardInterface {
 
   String toFEN() {
     StringBuffer fenBuffer = StringBuffer();
-    // Generate FEN from board row 0 to row 7.
+    // Piece placement
     for (int row = 0; row < 8; row++) {
       int emptyCount = 0;
       for (int col = 0; col < 8; col++) {
@@ -87,17 +104,34 @@ class ChessBoardInterface {
       if (emptyCount > 0) fenBuffer.write(emptyCount);
       if (row < 7) fenBuffer.write("/");
     }
+
+    // Active color (turn)
     fenBuffer.write(" ");
     fenBuffer.write(turn == PieceColor.white ? "w" : "b");
+
+    // Castling availability
+    fenBuffer.write(" ");
+    fenBuffer.write(getCastlingRights());
+
+    // En passant target square (using "-" as default, modify if you have one)
+    fenBuffer.write(" ");
+    fenBuffer.write(
+      enPassantTarget != null
+          ? "${String.fromCharCode('a'.codeUnitAt(0) + enPassantTarget!.col)}${8 - enPassantTarget!.row}"
+          : "-",
+    );
+
+    // Halfmove clock and fullmove number (defaults here)
+    fenBuffer.write(" ");
+    fenBuffer.write(halfMoveClock);
+    fenBuffer.write(" ");
+    fenBuffer.write(fullMoveNumber);
+
     return fenBuffer.toString();
   }
 
-  ChessPiece? getPiece(Position position) {
-    return board[position.row][position.col];
-  }
-
   /// Moves a piece on the board without validation.
-  bool _movePiece(Position from, Position to) {
+  bool movePiece(Position from, Position to) {
     ChessPiece? piece = getPiece(from);
     if (piece == null) return false;
 
@@ -108,52 +142,73 @@ class ChessBoardInterface {
     return true;
   }
 
-  bool move(Position from, Position to) {
-    ChessPiece? piece = getPiece(from);
-    if (piece == null || piece.color != turn) {
-      return false; // No piece or wrong turn
-    }
-    if (!MoveValidator.isValidMove(this, from, to)) {
-      return false; // Illegal move as per validator
-    }
-
-    // Save current state for undo.
-    history.add(toFEN());
-
-    // Handle En Passant capture (if applicable).
-    if (piece.type == PieceType.pawn &&
-        enPassantTarget != null &&
-        to == enPassantTarget) {
-      int captureRow =
-          piece.color == PieceColor.white ? to.row + 1 : to.row - 1;
-      board[captureRow][to.col] = null;
-    }
-
-    // Set en passant target if pawn moves two squares.
-    enPassantTarget =
-        (piece.type == PieceType.pawn && (from.row - to.row).abs() == 2)
-            ? Position(row: (from.row + to.row) ~/ 2, col: from.col)
-            : null;
-
-    // Capture any piece on the destination and move the piece.
-    ChessPiece? capturedPiece = getPiece(to);
-    _movePiece(from, to);
-
-    // Validate that the move doesn't leave the king in check.
-    if (isKingInCheck(turn)) {
-      // Undo the move if it puts the king in check.
-      _movePiece(to, from);
-      board[to.row][to.col] = capturedPiece;
-      return false;
-    }
-
-    // Switch turn after a successful move.
-    switchTurn();
-    // Clear redo history.
-    redoHistory.clear();
-
-    return true;
+  static String _getPieceChar(ChessPiece piece) {
+    Map<PieceType, String> whitePieces = {
+      PieceType.pawn: "P",
+      PieceType.knight: "N",
+      PieceType.bishop: "B",
+      PieceType.rook: "R",
+      PieceType.queen: "Q",
+      PieceType.king: "K",
+    };
+    Map<PieceType, String> blackPieces = {
+      PieceType.pawn: "p",
+      PieceType.knight: "n",
+      PieceType.bishop: "b",
+      PieceType.rook: "r",
+      PieceType.queen: "q",
+      PieceType.king: "k",
+    };
+    return (piece.color == PieceColor.white
+        ? whitePieces[piece.type]
+        : blackPieces[piece.type])!;
   }
+
+  static ChessPiece _getPieceFromChar(String char) {
+    Map<String, ChessPiece> pieceMap = {
+      "P": ChessPiece(type: PieceType.pawn, color: PieceColor.white),
+      "N": ChessPiece(type: PieceType.knight, color: PieceColor.white),
+      "B": ChessPiece(type: PieceType.bishop, color: PieceColor.white),
+      "R": ChessPiece(type: PieceType.rook, color: PieceColor.white),
+      "Q": ChessPiece(type: PieceType.queen, color: PieceColor.white),
+      "K": ChessPiece(type: PieceType.king, color: PieceColor.white),
+      "p": ChessPiece(type: PieceType.pawn, color: PieceColor.black),
+      "n": ChessPiece(type: PieceType.knight, color: PieceColor.black),
+      "b": ChessPiece(type: PieceType.bishop, color: PieceColor.black),
+      "r": ChessPiece(type: PieceType.rook, color: PieceColor.black),
+      "q": ChessPiece(type: PieceType.queen, color: PieceColor.black),
+      "k": ChessPiece(type: PieceType.king, color: PieceColor.black),
+    };
+    return pieceMap[char]!;
+  }
+}
+
+extension ChessBoardInterfaceExtension on ChessBoardInterface {
+  String getCastlingRights() {
+    String rights = "";
+
+    // White castling rights:
+    if (!MoveValidator.hasLostCastlingRights(this, PieceColor.white, true)) {
+      rights += "K"; // White king-side available
+    }
+    if (!MoveValidator.hasLostCastlingRights(this, PieceColor.white, false)) {
+      rights += "Q"; // White queen-side available
+    }
+
+    // Black castling rights:
+    if (!MoveValidator.hasLostCastlingRights(this, PieceColor.black, true)) {
+      rights += "k"; // Black king-side available
+    }
+    if (!MoveValidator.hasLostCastlingRights(this, PieceColor.black, false)) {
+      rights += "q"; // Black queen-side available
+    }
+
+    return rights.isEmpty ? "-" : rights;
+  }
+
+  // int countPieces(String row) {
+  //   return row.replaceAll(RegExp(r'[^KQRBNPkpqrbnp]'), '').length;
+  // }
 
   bool isKingInCheck(PieceColor kingColor) {
     int kingRow = -1, kingCol = -1;
@@ -208,12 +263,12 @@ class ChessBoardInterface {
                 ChessPiece? capturedPiece = getPiece(
                   Position(row: newRow, col: newCol),
                 );
-                _movePiece(
+                movePiece(
                   Position(row: row, col: col),
                   Position(row: newRow, col: newCol),
                 );
                 bool stillInCheck = isKingInCheck(kingColor);
-                _movePiece(
+                movePiece(
                   Position(row: newRow, col: newCol),
                   Position(row: row, col: col),
                 );
@@ -249,28 +304,32 @@ class ChessBoardInterface {
     return !isKingInCheck(turn);
   }
 
-  List<Position> getValidMoves(Position position) {
-    ChessPiece? piece = getPiece(position);
+  List<Position> getValidMoves(Position from) {
+    ChessPiece? piece = getPiece(from);
     if (piece == null || piece.color != turn) return [];
 
     List<Position> validMoves = [];
 
+    // Existing valid move logic: iterate over board squares and check if a move is valid.
     for (int row = 0; row < 8; row++) {
       for (int col = 0; col < 8; col++) {
         Position target = Position(row: row, col: col);
-        if (MoveValidator.isValidMove(this, position, target)) {
-          // Simulate move to see if king remains safe.
-          ChessPiece? capturedPiece = getPiece(target);
-          _movePiece(position, target);
-          bool stillInCheck = isKingInCheck(turn);
-          _movePiece(target, position);
-          board[target.row][target.col] =
-              capturedPiece; // Restore captured piece
-
-          if (!stillInCheck) {
-            validMoves.add(target);
-          }
+        if (MoveValidator.isValidMove(this, from, target)) {
+          // (Optional: simulate the move to ensure the king does not end up in check.)
+          validMoves.add(target);
         }
+      }
+    }
+
+    // If the selected piece is the king, add castling moves.
+    if (piece.type == PieceType.king) {
+      // King‑side castling: king should move to column 6.
+      if (MoveValidator.canCastleKingSide(this, piece.color)) {
+        validMoves.add(Position(row: from.row, col: 6));
+      }
+      // Queen‑side castling: king should move to column 2.
+      if (MoveValidator.canCastleQueenSide(this, piece.color)) {
+        validMoves.add(Position(row: from.row, col: 2));
       }
     }
 
@@ -327,43 +386,177 @@ class ChessBoardInterface {
     turn = (turn == PieceColor.white) ? PieceColor.black : PieceColor.white;
   }
 
-  static String _getPieceChar(ChessPiece piece) {
-    Map<PieceType, String> whitePieces = {
-      PieceType.pawn: "P",
-      PieceType.knight: "N",
-      PieceType.bishop: "B",
-      PieceType.rook: "R",
-      PieceType.queen: "Q",
-      PieceType.king: "K",
-    };
-    Map<PieceType, String> blackPieces = {
-      PieceType.pawn: "p",
-      PieceType.knight: "n",
-      PieceType.bishop: "b",
-      PieceType.rook: "r",
-      PieceType.queen: "q",
-      PieceType.king: "k",
-    };
-    return (piece.color == PieceColor.white
-        ? whitePieces[piece.type]
-        : blackPieces[piece.type])!;
+  ChessPiece? getPiece(Position position) {
+    return board[position.row][position.col];
   }
 
-  static ChessPiece _getPieceFromChar(String char) {
-    Map<String, ChessPiece> pieceMap = {
-      "P": ChessPiece(type: PieceType.pawn, color: PieceColor.white),
-      "N": ChessPiece(type: PieceType.knight, color: PieceColor.white),
-      "B": ChessPiece(type: PieceType.bishop, color: PieceColor.white),
-      "R": ChessPiece(type: PieceType.rook, color: PieceColor.white),
-      "Q": ChessPiece(type: PieceType.queen, color: PieceColor.white),
-      "K": ChessPiece(type: PieceType.king, color: PieceColor.white),
-      "p": ChessPiece(type: PieceType.pawn, color: PieceColor.black),
-      "n": ChessPiece(type: PieceType.knight, color: PieceColor.black),
-      "b": ChessPiece(type: PieceType.bishop, color: PieceColor.black),
-      "r": ChessPiece(type: PieceType.rook, color: PieceColor.black),
-      "q": ChessPiece(type: PieceType.queen, color: PieceColor.black),
-      "k": ChessPiece(type: PieceType.king, color: PieceColor.black),
-    };
-    return pieceMap[char]!;
+  bool move(Position from, Position to) {
+    ChessPiece? piece = getPiece(from);
+    if (piece == null || piece.color != turn) {
+      return false; // No piece or wrong turn.
+    }
+
+    // Check for castling move: king moving two squares horizontally.
+    bool isCastlingMove =
+        piece.type == PieceType.king &&
+        (to.col - from.col).abs() == 2 &&
+        from.row == to.row;
+
+    // For normal moves, use the validator.
+    if (!isCastlingMove && !MoveValidator.isValidMove(this, from, to)) {
+      return false; // Illegal move.
+    }
+
+    // Save current state for undo.
+    history.add(toFEN());
+
+    // Handle castling separately.
+    if (isCastlingMove) {
+      // Determine kingside or queenside castling.
+      if (to.col > from.col) {
+        // Kingside castling.
+        if (!MoveValidator.canCastleKingSide(this, piece.color)) {
+          return false;
+        }
+        // Move the king.
+        movePiece(from, to);
+        // Move the rook: from the corner to the square adjacent to the king.
+        Position rookFrom = Position(row: from.row, col: 7);
+        Position rookTo = Position(row: from.row, col: 5);
+        movePiece(rookFrom, rookTo);
+      } else {
+        // Queenside castling.
+        if (!MoveValidator.canCastleQueenSide(this, piece.color)) {
+          return false;
+        }
+        // Move the king.
+        movePiece(from, to);
+        // Move the rook: from the corner to the square adjacent to the king.
+        Position rookFrom = Position(row: from.row, col: 0);
+        Position rookTo = Position(row: from.row, col: 3);
+        movePiece(rookFrom, rookTo);
+      }
+    } else {
+      // Normal move: handle en passant, captures, etc.
+      // Handle En Passant capture (if applicable).
+      if (piece.type == PieceType.pawn &&
+          enPassantTarget != null &&
+          to == enPassantTarget) {
+        int captureRow =
+            piece.color == PieceColor.white ? to.row + 1 : to.row - 1;
+        board[captureRow][to.col] = null;
+      }
+
+      // Set en passant target if pawn moves two squares.
+      enPassantTarget =
+          (piece.type == PieceType.pawn && (from.row - to.row).abs() == 2)
+              ? Position(row: (from.row + to.row) ~/ 2, col: from.col)
+              : null;
+
+      // Capture any piece on the destination and move the piece.
+      ChessPiece? capturedPiece = getPiece(to);
+      movePiece(from, to);
+
+      // Validate that the move doesn't leave the king in check.
+      if (isKingInCheck(turn)) {
+        // Undo the move if it puts the king in check.
+        movePiece(to, from);
+        board[to.row][to.col] = capturedPiece;
+        return false;
+      }
+    }
+
+    // Update half-move clock and full-move number (using your existing logic)...
+    // For example:
+    // if (move resets half-move clock) halfMoveClock = 0; else halfMoveClock++;
+    // if (turn == PieceColor.black) fullMoveNumber++;
+
+    // Switch turn after a successful move.
+    switchTurn();
+    // Clear redo history.
+    redoHistory.clear();
+
+    return true;
+  }
+}
+
+extension LastMoveGetter on ChessBoardInterface {
+  // Returns the position from which a piece was moved,
+  // deduced by comparing the second last and last FEN strings.
+  Position? get lastMoveFrom {
+    if (history.length < 2) return null;
+    String previousFen = history[history.length - 2];
+    String currentFen = history.last;
+    List<List<ChessPiece?>> prevBoard = _decodeBoard(previousFen);
+    List<List<ChessPiece?>> currBoard = _decodeBoard(currentFen);
+    for (int row = 0; row < 8; row++) {
+      for (int col = 0; col < 8; col++) {
+        // If a square had a piece and now is empty,
+        // we assume that's where the piece moved from.
+        if (prevBoard[row][col] != null && currBoard[row][col] == null) {
+          return Position(row: row, col: col);
+        }
+      }
+    }
+    return null;
+  }
+
+  // Returns the destination square where a piece was moved,
+  // deduced by comparing the second last and last FEN strings.
+  Position? get lastMoveTo {
+    if (history.length < 2) return null;
+    String previousFen = history[history.length - 2];
+    String currentFen = history.last;
+    List<List<ChessPiece?>> prevBoard = _decodeBoard(previousFen);
+    List<List<ChessPiece?>> currBoard = _decodeBoard(currentFen);
+    for (int row = 0; row < 8; row++) {
+      for (int col = 0; col < 8; col++) {
+        // If a square was empty and now holds a piece,
+        // that square is the destination.
+        if (prevBoard[row][col] == null && currBoard[row][col] != null) {
+          return Position(row: row, col: col);
+        }
+      }
+    }
+    return null;
+  }
+
+  // Helper method to decode the board portion of a FEN string into a 2D list.
+  List<List<ChessPiece?>> _decodeBoard(String fen) {
+    List<List<ChessPiece?>> board = List.generate(
+      8,
+      (_) => List.filled(8, null),
+    );
+    List<String> parts = fen.split(" ");
+    List<String> rows = parts[0].split("/");
+    for (int row = 0; row < 8; row++) {
+      int col = 0;
+      for (int i = 0; i < rows[row].length; i++) {
+        String charAt = rows[row][i];
+        if (RegExp(r'[1-8]').hasMatch(charAt)) {
+          col += int.parse(charAt);
+        } else {
+          board[row][col] = ChessBoardInterface._getPieceFromChar(charAt);
+          col++;
+        }
+      }
+    }
+    return board;
+  }
+}
+
+extension DeepCopy on ChessBoardInterface {
+  ChessBoardInterface deepCopy() {
+    ChessBoardInterface newBoard = ChessBoardInterface(fen: fen);
+    for (int row = 0; row < 8; row++) {
+      for (int col = 0; col < 8; col++) {
+        newBoard.board[row][col] = board[row][col];
+      }
+    }
+    newBoard.turn = turn;
+    newBoard.enPassantTarget = enPassantTarget;
+    newBoard.history = List.from(history);
+    newBoard.redoHistory = List.from(redoHistory);
+    return newBoard;
   }
 }

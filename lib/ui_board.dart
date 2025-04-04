@@ -247,6 +247,8 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
                     game.canUndo()
                         ? () {
                           game.undo();
+                          selectedPosition = null;
+                          validMoves.clear();
                           setState(() {});
                         }
                         : null,
@@ -257,6 +259,8 @@ class _ChessBoardUIState extends State<ChessBoardUI> {
                     game.canRedo()
                         ? () {
                           game.redo();
+                          selectedPosition = null;
+                          validMoves.clear();
                           setState(() {});
                         }
                         : null,

@@ -146,4 +146,75 @@ class MoveValidator {
   static bool _validateKingMove(Position from, Position to) {
     return (to.row - from.row).abs() <= 1 && (to.col - from.col).abs() <= 1;
   }
+
+  static bool canCastleKingSide(ChessBoardInterface board, PieceColor color) {
+    if (hasLostCastlingRights(board, color, true)) {
+      return false; // Castling lost
+    }
+
+    int row = (color == PieceColor.white) ? 7 : 0;
+    if (board.getPiece(Position(row: row, col: 5)) != null ||
+        board.getPiece(Position(row: row, col: 6)) != null) {
+      return false;
+    }
+
+    if (board.isKingInCheck(color)) return false;
+
+    ChessBoardInterface tempBoard = board.deepCopy();
+    tempBoard.movePiece(Position(row: row, col: 4), Position(row: row, col: 5));
+    if (tempBoard.isKingInCheck(color)) return false;
+
+    tempBoard = board.deepCopy();
+    tempBoard.movePiece(Position(row: row, col: 4), Position(row: row, col: 6));
+    if (tempBoard.isKingInCheck(color)) return false;
+
+    return true;
+  }
+
+  static bool canCastleQueenSide(ChessBoardInterface board, PieceColor color) {
+    if (hasLostCastlingRights(board, color, false)) {
+      return false; // Castling lost
+    }
+
+    int row = (color == PieceColor.white) ? 7 : 0;
+    if (board.getPiece(Position(row: row, col: 1)) != null ||
+        board.getPiece(Position(row: row, col: 2)) != null ||
+        board.getPiece(Position(row: row, col: 3)) != null) {
+      return false;
+    }
+
+    if (board.isKingInCheck(color)) return false;
+
+    ChessBoardInterface tempBoard = board.deepCopy();
+    tempBoard.movePiece(Position(row: row, col: 4), Position(row: row, col: 3));
+    if (tempBoard.isKingInCheck(color)) return false;
+
+    tempBoard = board.deepCopy();
+    tempBoard.movePiece(Position(row: row, col: 4), Position(row: row, col: 2));
+    if (tempBoard.isKingInCheck(color)) return false;
+
+    return true;
+  }
+
+  static bool hasLostCastlingRights(
+    ChessBoardInterface board,
+    PieceColor color,
+    bool kingSide,
+  ) {
+    for (String fen in board.history) {
+      List<String> parts = fen.split(" ");
+      if (parts.length < 2) continue; // Invalid FEN format
+
+      String castlingRights = parts[2]; // Extract castling field
+
+      if (color == PieceColor.white) {
+        if (kingSide && !castlingRights.contains("K")) return true;
+        if (!kingSide && !castlingRights.contains("Q")) return true;
+      } else {
+        if (kingSide && !castlingRights.contains("k")) return true;
+        if (!kingSide && !castlingRights.contains("q")) return true;
+      }
+    }
+    return false;
+  }
 }
