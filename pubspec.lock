@@ -25,6 +25,15 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
+  chess_interface:
+    dependency: "direct main"
+    description:
+      path: "."
+      ref: HEAD
+      resolved-ref: "034e620d708331048b1b2bdeffe2ce9f2768c521"
+      url: "https://github.com/mryadavdilip/chess_interface.git"
+    source: git
+    version: "1.0.0"
   clock:
     dependency: transitive
     description:
@@ -121,7 +130,7 @@ packages:
     source: sdk
     version: "0.0.0"
   gradient_circular_progress_indicator:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: gradient_circular_progress_indicator
       sha256: "0a9d69c1226b6f273b365aa9fabf92de4ee353dfb185c9dcbc04aa97178037df"

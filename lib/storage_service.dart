@@ -1,7 +1,7 @@
 import 'dart:convert';
 
+import 'package:chess_interface/models/board_theme_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:smart_chess/models/board_theme_config.dart';
 
 class StorageService {
   static const String boardConfigKey = "chess_board_config";

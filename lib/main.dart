@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'ui_board.dart';
+import 'game_screen.dart';
 
 void main() {
   runApp(const ChessApp());
@@ -12,12 +12,12 @@ class ChessApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ScreenUtilInit(
-      designSize: const Size(360, 690),
+      designSize: MediaQuery.sizeOf(context),
       builder: (context, child) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           theme: ThemeData.dark(),
-          home: ChessBoardUI(),
+          home: GameScreen(),
         );
       },
     );
